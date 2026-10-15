@@ -171,6 +171,10 @@ a credential, which is what the exposure check keys off.
 | `OBSERVABILITY_WEBHOOK_URL`                   | https url          | Secret — `/api/observability/events` target   |
 | `METRICS_SECRET_TOKEN`                        | string             | Secret — bearer token for the metrics route   |
 | `PLATFORM_ADMIN_ADDRESS`                      | Stellar account id | Server-side admin rights                      |
+| `COMMENT_STORE_DRIVER`                        | `memory`\|`file`\|`redis` | Adapter for comments, reports and rate limits |
+| `COMMENT_STORE_PATH`                          | string             | File path for the `file` adapter              |
+| `COMMENT_STORE_REDIS_REST_URL`                | url                | Secret — shared Redis REST endpoint           |
+| `COMMENT_STORE_REDIS_REST_TOKEN`              | string             | Secret — Redis REST auth token                |
 | `OBSERVABILITY_ALERT_SIMULATION_FAILURE_RATE` | number 0–1         | Default 0.15                                  |
 | `OBSERVABILITY_ALERT_SUBMISSION_FAILURE_RATE` | number 0–1         | Default 0.1                                   |
 | `OBSERVABILITY_ALERT_RPC_TIMEOUT_RATE`        | number 0–1         | Default 0.2                                   |

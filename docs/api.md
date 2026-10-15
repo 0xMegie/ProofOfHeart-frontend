@@ -4,6 +4,40 @@ All routes are Next.js App Router API handlers under `/src/app/api/`. They are a
 
 ---
 
+## Storage requirement (comments, reports, rate limits)
+
+Campaign comments, abuse reports and rate-limit counters are server state. They
+must **survive a process restart** and be **shared by every instance** — an
+in-memory `Map` or array is lost on deploy and duplicated per instance, which
+silently loses comments and lets a rate limit be bypassed by landing on another
+instance.
+
+That state goes through a single key/value store (`src/lib/persistentStore.ts`)
+that the comment and report repositories (`src/lib/commentRepository.ts`,
+`src/lib/reportRepository.ts`) and the rate limiter (`src/lib/rateLimit.ts`)
+are built on:
+
+| `COMMENT_STORE_DRIVER` | Behavior                                                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `memory`               | Process-local. Tests and throwaway local runs only — data is lost on restart.             |
+| `file`                 | Single JSON file at `COMMENT_STORE_PATH`. Survives restart; shared across a shared volume. |
+| `redis`                | Upstash-compatible REST. Survives restart **and** is shared across all instances. Use this in production. |
+
+Both Redis variables are required when the `redis` adapter is selected; the
+adapter is also selected automatically when both are set and no explicit driver
+is given. See `.env.example` and `docs/ENVIRONMENT_VARIABLES.md`.
+
+### On-chain comment censure
+
+Comment text lives off-chain, but moderation is not meant to be invisible.
+The contract records censures keyed by a **32-byte comment hash**
+(`censure_comment` / `is_comment_censured`). Every comment is therefore stored
+with `commentHash`, the sha256 of its canonical fields
+(`src/lib/commentHash.ts`), and `GET`/`POST` comments filter out any hash the
+contract has censured (`src/lib/commentCensure.ts`).
+
+---
+
 ## `GET /api/health`
 
 Health check for Docker `HEALTHCHECK`, uptime monitors, and the in-app degraded-network banner.
@@ -146,6 +180,99 @@ Mark a report as reviewed (admin only — caller should verify admin address ser
 
 ---
 
+## `GET /api/campaigns/[id]/comments`
+
+Page through a campaign's off-chain comments. Comments censured on-chain are
+removed before the page is built, so a censured comment never reaches the UI.
+
+**Query params**
+
+| Param      | Default | Notes                    |
+| ---------- | ------- | ------------------------ |
+| `page`     | `1`     | 1-based page number      |
+| `pageSize` | `20`    | Clamped to the range 1–100 |
+
+**Response**
+
+```json
+{
+  "items": [
+    {
+      "id": "comment-1-1",
+      "campaignId": 1,
+      "content": "…",
+      "authorAddress": "G…",
+      "timestamp": 1700000000,
+      "parentId": null,
+      "signature": "…",
+      "isPinned": false,
+      "isReported": false,
+      "commentHash": "sha256 hex of the canonical comment"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 20,
+  "hasMore": false
+}
+```
+
+| Status | Meaning                      |
+| ------ | ---------------------------- |
+| `200`  | Page returned (may be empty) |
+| `400`  | Invalid campaign ID          |
+
+---
+
+## `POST /api/campaigns/[id]/comments`
+
+Create a comment. Rate-limited to 5 per address per campaign per minute.
+
+**Request body**
+
+```json
+{
+  "content": "string (1–2000 chars)",
+  "authorAddress": "G…",
+  "timestamp": 1700000000,
+  "parentId": null,
+  "signature": "hex signature over the comment payload"
+}
+```
+
+**Response** — the stored comment, including the computed `commentHash`.
+
+| Status | Meaning               |
+| ------ | --------------------- |
+| `201`  | Comment created       |
+| `400`  | Invalid payload       |
+| `429`  | Rate limit exceeded   |
+
+---
+
+## `POST /api/campaigns/[id]/comments/[commentId]/pin`
+
+Pin or unpin a comment.
+
+**Request body**
+
+```json
+{ "isPinned": true }
+```
+
+**Response** — the updated comment, or `404` if the comment ID is unknown.
+
+---
+
+## `POST /api/campaigns/[id]/comments/[commentId]/report`
+
+Report a comment. Rate-limited to 3 per IP per minute.
+
+**Response** — the updated comment with `isReported: true`, or `404` if the
+comment ID is unknown.
+
+---
+
 ## `GET /api/admin-audit-log`
 
 Retrieve the admin action audit trail (verify, reject, fee update, admin transfer).
@@ -212,3 +339,7 @@ Ingest client-side error events for server-side logging and monitoring.
 | `TESTNET_RPC_URL`             | `/api/rpc`    | Testnet Soroban RPC (defaults to public endpoint) |
 | `NEXT_PUBLIC_STELLAR_NETWORK` | `/api/rpc`    | `mainnet` or `testnet`                            |
 | `NEXT_PUBLIC_SOROBAN_RPC_URL` | `/api/health` | Public RPC for health probe                       |
+| `COMMENT_STORE_DRIVER`        | comments, reports, rate limits | `memory`, `file` or `redis` |
+| `COMMENT_STORE_PATH`          | comments, reports, rate limits | File path for the `file` adapter |
+| `COMMENT_STORE_REDIS_REST_URL` | comments, reports, rate limits | Shared Redis REST endpoint |
+| `COMMENT_STORE_REDIS_REST_TOKEN` | comments, reports, rate limits | Auth token for the Redis REST endpoint |

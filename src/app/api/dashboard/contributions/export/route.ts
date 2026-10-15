@@ -8,7 +8,7 @@ import { scValToTopicSegment, parseContributionAmount } from "@/lib/sorobanEvent
 import { createRateLimiter, rateLimitKeyFromRequest } from "@/lib/rateLimit";
 
 // Allow each address/IP at most 5 CSV exports per minute to prevent amplification abuse.
-const exportRateLimiter = createRateLimiter(60_000, 5);
+const exportRateLimiter = createRateLimiter("contribution_export", 60_000, 5);
 
 const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ??
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     // Rate-limit by wallet address, falling back to client IP.
     const rlKey = rateLimitKeyFromRequest(req, address);
-    if (!exportRateLimiter.check(rlKey)) {
+    if (!(await exportRateLimiter.check(rlKey))) {
       return NextResponse.json(
         { error: "Too many requests. Please wait before exporting again." },
         { status: 429 },

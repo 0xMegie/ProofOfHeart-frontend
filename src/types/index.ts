@@ -200,6 +200,8 @@ export interface Comment {
   signature: string;
   isPinned: boolean;
   isReported: boolean;
+  /** sha256 of the canonical comment, used to match on-chain censures (#1682). */
+  commentHash?: string;
 }
 
 export interface CommentPayload {

@@ -1,7 +1,11 @@
+import { getKeyValueStore } from "./persistentStore";
+
 /**
- * In-memory sliding-window rate limiter.
+ * Sliding-window rate limiter backed by the shared server store (#1682).
  *
- * Each limiter is an independent namespace with its own window and cap.
+ * Each limiter is an independent namespace with its own window and cap, and
+ * counters live in the same store as comments and reports so they survive a
+ * restart and are shared across instances.
  */
 
 interface RateLimitEntry {
@@ -11,7 +15,7 @@ interface RateLimitEntry {
 
 export interface RateLimiter {
   /** Returns `true` if the request is allowed, `false` if rate-limited. */
-  check: (key: string) => boolean;
+  check: (key: string) => Promise<boolean>;
 }
 
 /**
@@ -19,19 +23,23 @@ export interface RateLimiter {
  * milliseconds for a given key.
  *
  * Keys are typically IP addresses, user-agent hashes, or wallet addresses.
+ * `name` namespaces the counters so independent limiters never collide.
  */
-export function createRateLimiter(windowMs: number, max: number): RateLimiter {
-  const map = new Map<string, RateLimitEntry>();
+export function createRateLimiter(name: string, windowMs: number, max: number): RateLimiter {
+  const prefix = `ratelimit:${name}:`;
 
-  function checkRateLimit(key: string): boolean {
+  async function checkRateLimit(key: string): Promise<boolean> {
+    const store = getKeyValueStore();
+    const storeKey = `${prefix}${key}`;
     const now = Date.now();
-    const entry = map.get(key);
+
+    const entry = await store.get<RateLimitEntry>(storeKey);
     if (!entry || now > entry.resetAt) {
-      map.set(key, { count: 1, resetAt: now + windowMs });
+      await store.set(storeKey, { count: 1, resetAt: now + windowMs });
       return true;
     }
     if (entry.count >= max) return false;
-    entry.count += 1;
+    await store.set(storeKey, { count: entry.count + 1, resetAt: entry.resetAt });
     return true;
   }
 

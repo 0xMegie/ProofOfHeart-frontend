@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reportStore } from "@/lib/reportStore";
+import { getReportRepository } from "@/lib/reportRepository";
 import { CampaignReport } from "@/lib/campaignReports";
 import { createRateLimiter, rateLimitKeyFromRequest } from "@/lib/rateLimit";
 import { CreateReportBodySchema } from "@/lib/schemas";
 
-const reportRateLimiter = createRateLimiter(60_000, 3);
+const reportRateLimiter = createRateLimiter("campaign_reports", 60_000, 3);
 
 // GET /api/reports  — admin moderation queue
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const status = url.searchParams.get("status") ?? "all";
+  const statusParam = url.searchParams.get("status");
+  const status = statusParam === "pending" || statusParam === "reviewed" ? statusParam : undefined;
 
-  const results =
-    status === "pending"
-      ? reportStore.filter((r) => r.status === "pending")
-      : status === "reviewed"
-        ? reportStore.filter((r) => r.status === "reviewed")
-        : [...reportStore];
-
-  results.sort((a, b) => b.timestamp - a.timestamp);
+  const results = await getReportRepository().list(status);
   return NextResponse.json(results);
 }
 
@@ -41,10 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { campaignId, campaignTitle, reason, notes, reporterAddress } = parsed.data;
+  const repository = getReportRepository();
 
   // Rate limit: keyed by reporter address or IP
   const rateLimitKey = rateLimitKeyFromRequest(req, reporterAddress);
-  if (!reportRateLimiter.check(rateLimitKey)) {
+  if (!(await reportRateLimiter.check(rateLimitKey))) {
     return NextResponse.json(
       { message: "Too many reports. Please wait before reporting again." },
       { status: 429 },
@@ -52,19 +47,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Spam protection: prevent duplicate reports from the same address for the same campaign
-  if (reporterAddress) {
-    const alreadyReported = reportStore.some(
-      (r) => r.campaignId === campaignId && r.reporterAddress === reporterAddress,
+  if (reporterAddress && (await repository.hasReporter(campaignId, reporterAddress))) {
+    return NextResponse.json(
+      { message: "You have already reported this campaign." },
+      { status: 409 },
     );
-    if (alreadyReported) {
-      return NextResponse.json(
-        { message: "You have already reported this campaign." },
-        { status: 409 },
-      );
-    }
   }
 
-  const reportCounter = reportStore.length + 1;
+  const existing = await repository.list();
+  const reportCounter = existing.length + 1;
   const report: CampaignReport = {
     id: `report-${campaignId}-${reportCounter}`,
     campaignId,
@@ -76,6 +67,6 @@ export async function POST(req: NextRequest) {
     status: "pending",
   };
 
-  reportStore.push(report);
+  await repository.add(report);
   return NextResponse.json(report, { status: 201 });
 }

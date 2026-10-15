@@ -29,6 +29,7 @@ export const CommentSchema = z.object({
   signature: z.string(),
   isPinned: z.boolean(),
   isReported: z.boolean(),
+  commentHash: z.string().optional(),
 });
 
 export type Comment = z.infer<typeof CommentSchema>;

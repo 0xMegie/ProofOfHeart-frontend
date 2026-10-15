@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reportStore } from "@/lib/reportStore";
+import { getReportRepository } from "@/lib/reportRepository";
 import { z } from "zod";
 
 const PatchReportBodySchema = z.object({
@@ -25,11 +25,10 @@ export async function PATCH(
     return NextResponse.json({ message: "status must be 'reviewed'" }, { status: 400 });
   }
 
-  const idx = reportStore.findIndex((r) => r.id === reportId);
-  if (idx === -1) {
+  const updated = await getReportRepository().markReviewed(reportId);
+  if (!updated) {
     return NextResponse.json({ message: "Report not found" }, { status: 404 });
   }
 
-  reportStore[idx] = { ...reportStore[idx], status: "reviewed" };
-  return NextResponse.json(reportStore[idx]);
+  return NextResponse.json(updated);
 }

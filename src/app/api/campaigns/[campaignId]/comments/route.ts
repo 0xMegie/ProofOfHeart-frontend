@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Comment } from "@/types";
-import { commentStore } from "@/lib/commentStore";
+import { getCommentRepository } from "@/lib/commentRepository";
 import { createRateLimiter } from "@/lib/rateLimit";
 import { CreateCommentBodySchema } from "@/lib/schemas";
+import { hashComment } from "@/lib/commentHash";
+import { filterCensuredComments } from "@/lib/commentCensure";
 
 const PAGE_SIZE = 20;
 
-const commentRateLimiter = createRateLimiter(60_000, 5);
+const commentRateLimiter = createRateLimiter("campaign_comments", 60_000, 5);
 
 // GET /api/campaigns/[campaignId]/comments?page=1&pageSize=20
 export async function GET(
@@ -26,7 +28,9 @@ export async function GET(
     Math.max(1, parseInt(url.searchParams.get("pageSize") ?? String(PAGE_SIZE), 10)),
   );
 
-  const all = (commentStore.get(campaignId) ?? []).filter((c) => !c.isReported);
+  const stored = await getCommentRepository().list(campaignId);
+  const notCensured = await filterCensuredComments(campaignId, stored);
+  const all = notCensured.filter((c) => !c.isReported);
   const total = all.length;
   const items = all.slice((page - 1) * pageSize, page * pageSize);
 
@@ -63,28 +67,38 @@ export async function POST(
   const { content, authorAddress, timestamp, parentId, signature } = parsed.data;
 
   const rateLimitKey = `${authorAddress}:${campaignId}`;
-  if (!commentRateLimiter.check(rateLimitKey)) {
+  if (!(await commentRateLimiter.check(rateLimitKey))) {
     return NextResponse.json(
       { message: "Too many requests. Please wait before posting again." },
       { status: 429 },
     );
   }
 
-  const existing = commentStore.get(campaignId) ?? [];
+  const repository = getCommentRepository();
+  const existing = await repository.list(campaignId);
+
+  const resolvedTimestamp =
+    typeof timestamp === "number" ? timestamp : 1700000000000 + existing.length * 1000;
 
   const comment: Comment = {
     id: `comment-${campaignId}-${existing.length + 1}`,
     campaignId,
     content: content.trim(),
     authorAddress,
-    timestamp: typeof timestamp === "number" ? timestamp : 1700000000000 + existing.length * 1000,
+    timestamp: resolvedTimestamp,
     parentId: parentId ?? null,
     signature,
     isPinned: false,
     isReported: false,
+    commentHash: hashComment({
+      campaignId,
+      content: content.trim(),
+      authorAddress,
+      timestamp: resolvedTimestamp,
+    }),
   };
 
-  commentStore.set(campaignId, [...existing, comment]);
+  await repository.add(campaignId, comment);
 
   return NextResponse.json(comment, { status: 201 });
 }
