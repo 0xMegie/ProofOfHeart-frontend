@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Shared store reference — imported via the parent module in a real DB setup.
-// For now we re-use the in-memory map via a module-level import trick.
-import { commentStore } from "@/lib/commentStore";
+import { getCommentRepository } from "@/lib/commentRepository";
 
 // POST /api/campaigns/[campaignId]/comments/[commentId]/pin
 export async function POST(
@@ -27,14 +24,10 @@ export async function POST(
     return NextResponse.json({ message: "isPinned must be a boolean" }, { status: 400 });
   }
 
-  const comments = commentStore.get(campaignId) ?? [];
-  const idx = comments.findIndex((c) => c.id === commentId);
-  if (idx === -1) {
+  const updated = await getCommentRepository().update(campaignId, commentId, { isPinned });
+  if (!updated) {
     return NextResponse.json({ message: "Comment not found" }, { status: 404 });
   }
 
-  comments[idx] = { ...comments[idx], isPinned };
-  commentStore.set(campaignId, comments);
-
-  return NextResponse.json(comments[idx]);
+  return NextResponse.json(updated);
 }

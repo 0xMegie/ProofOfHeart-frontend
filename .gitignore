@@ -52,3 +52,6 @@ bundle-size-summary.json
 # npm audit artefacts
 npm-audit-report.json
 npm-audit-temp.json
+
+# local comment/report store (see COMMENT_STORE_PATH)
+/.data/

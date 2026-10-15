@@ -2,7 +2,7 @@
 
 > **Contract repo:** [Iris-IV/ProofOfHeart-stellar](https://github.com/Iris-IV/ProofOfHeart-stellar)
 > **Contract version:** `1` (`CONTRACT_VERSION` constant in `src/lib.rs`)
-> **SDK:** `soroban-sdk = "20.1.0"`
+> **SDK:** `soroban-sdk = "22.0.11"`
 
 ---
 

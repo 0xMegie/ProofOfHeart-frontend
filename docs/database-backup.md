@@ -7,14 +7,22 @@ However, the application maintains off-chain data stores that require a conventi
 | Data store         | Contents                                    | Location                                                |
 | ------------------ | ------------------------------------------- | ------------------------------------------------------- |
 | Admin audit log    | Admin actions (verify, reject, fee changes) | File-system JSON (`/data/admin-audit-log.json`)         |
-| Campaign reports   | Abuse reports and moderation decisions      | In-memory `reportStore` (see `src/lib/reportStore.ts`)  |
+| Campaign reports   | Abuse reports and moderation decisions      | Shared store (`src/lib/reportRepository.ts`)            |
 | Notification queue | Pending on-chain event notifications        | External service (configure via `NOTIFICATIONS_DB_URL`) |
+
+Campaign reports and comments now live in the configurable server store described
+in [docs/api.md](./api.md#storage-requirement-comments-reports-rate-limits)
+(`COMMENT_STORE_DRIVER`): back up the `file` adapter's JSON file, or rely on the
+`redis` adapter's own persistence.
 
 ---
 
 ## Automated daily backups
 
-A GitHub Actions workflow (`.github/workflows/db-backup.yml`) runs every day at **02:00 UTC** and exports off-chain data to a configured cloud storage bucket.
+There is currently **no active backup workflow** in `.github/workflows/` — a
+previously disabled `db-backup.yml.bak` was removed as a stale artifact. Restore
+or recreate the workflow before relying on automated daily exports to a
+configured cloud storage bucket.
 
 ### Required secrets
 
@@ -36,13 +44,16 @@ Set these in **Settings → Secrets and variables → Actions**:
 
 1. Download the target snapshot from cloud storage.
 2. Place `admin-audit-log.json` at the path expected by `src/lib/adminLog.ts`.
-3. Replay `campaign-reports.json` into `reportStore` via the admin import endpoint (to be implemented — see issue #683).
+3. Restore `campaign-reports.json` (or the Redis dump) into the configured store — see [docs/api.md](./api.md#storage-requirement-comments-reports-rate-limits).
 4. Restart the application.
 
 ---
 
 ## Local development
 
-Off-chain stores are ephemeral in development — they reset on every server restart. No backup configuration is needed locally.
+With the default `file` adapter, off-chain data persists in `.data/poh-store.json`
+across restarts. Under `NODE_ENV=test` (or `COMMENT_STORE_DRIVER=memory`) the
+stores are ephemeral and reset on every restart, so no backup configuration is
+needed for tests.
 
 To persist the audit log across restarts in a staging environment, set `DATA_DIR` to a mounted volume path and ensure the backup workflow can reach the staging `APP_API_BASE_URL`.

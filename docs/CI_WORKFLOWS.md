@@ -100,9 +100,8 @@ build, and it runs on `main` rather than on pull requests.
 
 ## Adding a workflow
 
-- Keep it in `.github/workflows/*.yml`. The `*.yml.bak` files are disabled leftovers
-  and are not loaded by GitHub Actions; delete one when its replacement lands rather
-  than leaving two configurations to compare.
+- Keep it in `.github/workflows/*.yml`, and delete the configuration it replaces
+  rather than leaving two to compare.
 - Scope `paths:` on pull-request triggers so a docs-only change does not pay for a
   security scan.
 - `permissions: contents: read` unless the job genuinely writes.

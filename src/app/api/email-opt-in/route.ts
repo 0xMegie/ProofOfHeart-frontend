@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createRateLimiter, rateLimitKeyFromRequest } from "@/lib/rateLimit";
 import { EmailOptInBodySchema } from "@/lib/schemas";
 
-const emailOptInRateLimiter = createRateLimiter(60_000, 10);
+const emailOptInRateLimiter = createRateLimiter("email_opt_in", 60_000, 10);
 
 /** Maximum accepted request body size (bytes). */
 const MAX_BODY_BYTES = 16 * 1024;
@@ -18,7 +18,7 @@ const MAX_BODY_BYTES = 16 * 1024;
  */
 export async function POST(req: NextRequest) {
   const rateLimitKey = rateLimitKeyFromRequest(req);
-  if (!emailOptInRateLimiter.check(rateLimitKey)) {
+  if (!(await emailOptInRateLimiter.check(rateLimitKey))) {
     return NextResponse.json(
       { ok: false, message: "Too many requests. Please slow down." },
       { status: 429 },

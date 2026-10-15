@@ -1508,6 +1508,30 @@ export async function getApprovalThresholdBps(): Promise<number> {
 }
 
 /**
+ * Whether an off-chain comment has been censured on-chain (#1682).
+ *
+ * The contract stores censure records keyed by an opaque 32-byte comment hash;
+ * the frontend computes that hash with `hashComment` in `./commentHash`.
+ * Unknown hashes read as not censured.
+ */
+export async function isCommentCensured(
+  campaignId: number,
+  commentHash: string,
+): Promise<boolean> {
+  if (USE_MOCKS) return false;
+  try {
+    const result = await invokeViewMethod("is_comment_censured", [
+      nativeToScVal(campaignId, { type: "u32" }),
+      xdr.ScVal.scvBytes(Buffer.from(commentHash, "hex")),
+    ]);
+    if (!result) return false;
+    return result.b();
+  } catch (err) {
+    throw new Error(parseContractError(err));
+  }
+}
+
+/**
  * Set or update a personal contribution cap for a campaign.
  * Pass BigInt(0) to remove the cap (unlimited).
  * Returns the transaction hash on success.

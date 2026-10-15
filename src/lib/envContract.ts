@@ -443,6 +443,44 @@ export const ENV_CONTRACT = [
     description: "Stellar address granted platform-admin rights server-side.",
   },
 
+  // --- Comment / report persistence -----------------------------------------
+  {
+    name: "COMMENT_STORE_DRIVER",
+    scope: "server",
+    value: "enum",
+    options: ["memory", "file", "redis"],
+    required: false,
+    secret: false,
+    description:
+      "Adapter backing the comment, report and rate-limit store. Redis is shared across instances.",
+    fallback: "file (memory when NODE_ENV=test, or when Redis credentials are set)",
+  },
+  {
+    name: "COMMENT_STORE_PATH",
+    scope: "server",
+    value: "string",
+    required: false,
+    secret: false,
+    description: "JSON file path used by the file store adapter.",
+    fallback: ".data/poh-store.json",
+  },
+  {
+    name: "COMMENT_STORE_REDIS_REST_URL",
+    scope: "server",
+    value: "url",
+    required: false,
+    secret: true,
+    description: "Upstash-compatible Redis REST endpoint backing the shared store.",
+  },
+  {
+    name: "COMMENT_STORE_REDIS_REST_TOKEN",
+    scope: "server",
+    value: "string",
+    required: false,
+    secret: true,
+    description: "Auth token for COMMENT_STORE_REDIS_REST_URL.",
+  },
+
   // --- Observability thresholds ---------------------------------------------
   {
     name: "OBSERVABILITY_ALERT_SIMULATION_FAILURE_RATE",

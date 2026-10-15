@@ -3,7 +3,7 @@ import { ingestObservabilityEvent } from "@/lib/observability/metricsStore";
 import { createRateLimiter, rateLimitKeyFromRequest } from "@/lib/rateLimit";
 import { ObservabilityEventBodySchema } from "@/lib/schemas";
 
-const observabilityRateLimiter = createRateLimiter(60_000, 10);
+const observabilityRateLimiter = createRateLimiter("observability_events", 60_000, 10);
 
 /**
  * Check x-metrics-token against METRICS_SECRET_TOKEN.
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   const rateLimitKey = rateLimitKeyFromRequest(req);
-  if (!observabilityRateLimiter.check(rateLimitKey)) {
+  if (!(await observabilityRateLimiter.check(rateLimitKey))) {
     return NextResponse.json({ message: "Too many requests. Please slow down." }, { status: 429 });
   }
 
